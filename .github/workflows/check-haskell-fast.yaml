@@ -42,11 +42,13 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
 
-      - name: Configure the build
+      - name: Configure
         shell: bash
-        run: |
-          cabal configure${{ !matrix.skip-tests && ' --enable-tests' || ''}}${{ !matrix.skip-benchmarks && ' --enable-benchmarks' || ''}}
-          cabal build all --dry-run
+        run: cabal configure${{ !matrix.skip-tests && ' --enable-tests' || ''}}${{ !matrix.skip-benchmarks && ' --enable-benchmarks' || ''}}
+        
+      - name: Generate the plan
+        shell: bash
+        run: cabal build all --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
