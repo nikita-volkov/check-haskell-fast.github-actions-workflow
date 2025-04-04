@@ -6,6 +6,9 @@ on:
       minimal-ghc:
         type: string
         default: "8.10"
+      skip-tests-on-minimal-ghc:
+        type: boolean
+        default: false
       skip-doctest:
         type: boolean
         default: false
@@ -23,7 +26,7 @@ jobs:
       matrix:
         include:
           - ghc: ${{ inputs.minimal-ghc }}
-            skip-tests: false
+            skip-tests: ${{ inputs.skip-tests-on-minimal-ghc }}
           - ghc: latest
             ghc-options: ""
 
