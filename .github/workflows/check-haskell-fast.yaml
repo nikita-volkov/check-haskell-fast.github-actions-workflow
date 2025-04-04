@@ -9,6 +9,9 @@ on:
       skip-tests-on-minimal-ghc:
         type: boolean
         default: false
+      skip-doctest-on-minimal-ghc:
+        type: boolean
+        default: false
       skip-doctest:
         type: boolean
         default: false
@@ -27,9 +30,11 @@ jobs:
         include:
           - ghc: ${{ inputs.minimal-ghc }}
             skip-tests: ${{ inputs.skip-tests-on-minimal-ghc }}
+            skip-doctest: ${{ inputs.skip-doctest || inputs.skip-doctest-on-minimal-ghc || inputs.skip-tests-on-minimal-ghc }}
             skip-benchmarks: true
           - ghc: latest
             ghc-options: ""
+            skip-doctest: ${{ inputs.skip-doctest }}
 
     runs-on: ubuntu-latest
 
@@ -65,7 +70,7 @@ jobs:
         run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
 
       - name: Install doctest
-        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
+        if: ${{ !matrix.skip-doctest }}
         run: cabal install doctest --overwrite-policy=always
 
       - name: Save dependencies cache
@@ -85,12 +90,12 @@ jobs:
         run: cabal test all --test-show-details streaming -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
 
       - name: Extract metadata from cabal file
-        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
+        if: ${{ !matrix.skip-doctest }}
         id: cabal-metadata
         uses: nikita-volkov/extract-metadata-from-cabal.github-action@v1
 
       - name: Run doctests
-        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
+        if: ${{ !matrix.skip-doctest }}
         shell: bash
         run: cabal repl --with-compiler=doctest ${{ steps.cabal-metadata.outputs.name }}
 
