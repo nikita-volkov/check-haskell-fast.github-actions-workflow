@@ -61,6 +61,10 @@ jobs:
         shell: bash
         run: cabal build all --only-dependencies${{ !matrix.skip-tests && ' --enable-tests --enable-benchmarks' || ''}} -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
 
+      - name: Install doctest
+        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
+        run: cabal install doctest --overwrite-policy=always
+
       - name: Save dependencies cache
         uses: actions/cache/save@v4
         if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
@@ -77,51 +81,13 @@ jobs:
         shell: bash
         run: cabal test all --test-show-details streaming -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
 
-  doctest:
-    if: ${{ !inputs.skip-doctest }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up GHC
-        id: setup
-        uses: haskell-actions/setup@v2
-
-      - name: Configure the build
-        shell: bash
-        run: |
-          cabal configure
-          cabal build all --dry-run
-
       - name: Extract metadata from cabal file
+        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
         id: cabal-metadata
         uses: nikita-volkov/extract-metadata-from-cabal.github-action@v1
 
-      - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
-        id: cache
-        env:
-          key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
-          restore-keys: ${{ env.key }}
-
-      - name: Install dependencies
-        shell: bash
-        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS
-
-      - name: Install doctest
-        run: cabal install doctest --overwrite-policy=always
-
-      - name: Save dependencies cache
-        uses: actions/cache/save@v4
-        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
-
       - name: Run doctests
+        if: ${{ !inputs.skip-doctest && !matrix.skip-tests }}
         shell: bash
         run: cabal repl --with-compiler=doctest ${{ steps.cabal-metadata.outputs.name }}
 
