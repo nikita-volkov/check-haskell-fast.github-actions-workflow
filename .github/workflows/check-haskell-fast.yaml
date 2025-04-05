@@ -21,6 +21,14 @@ on:
       skip-cabal-check:
         type: boolean
         default: false
+      minimal-cabal-configure-extra-args:
+        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text == 1.2.5\""
+        type: string
+        default: ""
+      maximal-cabal-configure-extra-args:
+        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text == 1.2.5\""
+        type: string
+        default: ""
 
 jobs:
   compile-and-test:
@@ -29,11 +37,13 @@ jobs:
       matrix:
         include:
           - ghc: ${{ inputs.minimal-ghc }}
+            cabal-configure-extra-args: ${{ inputs.minimal-cabal-configure-extra-args }}
             skip-tests: ${{ inputs.skip-tests-on-minimal-ghc }}
             skip-doctest: ${{ inputs.skip-doctest || inputs.skip-doctest-on-minimal-ghc || inputs.skip-tests-on-minimal-ghc }}
             skip-benchmarks: true
           - ghc: latest
             ghc-options: ""
+            cabal-configure-extra-args: ${{ inputs.maximal-cabal-configure-extra-args }}
             skip-doctest: ${{ inputs.skip-doctest }}
 
     runs-on: ubuntu-latest
@@ -49,8 +59,12 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: cabal configure${{ !matrix.skip-tests && ' --enable-tests' || ''}}${{ !matrix.skip-benchmarks && ' --enable-benchmarks' || ''}}
-        
+        run: >
+          cabal configure
+          ${{ !matrix.skip-tests && '--enable-tests' || '' }}
+          ${{ !matrix.skip-benchmarks && '--enable-benchmarks' || '' }}
+          ${{ matrix.cabal-configure-extra-args }}
+
       - name: Generate the plan
         shell: bash
         run: cabal build all --dry-run
