@@ -3,67 +3,62 @@ name: Compile, test and check a Haskell package
 on:
   workflow_call:
     inputs:
-      minimal-ghc:
+      ghc:
+        description: GHC version to use. For example, "8.10.7" or "latest".
         type: string
-        default: "8.10"
-      skip-tests-on-minimal-ghc:
-        type: boolean
-        default: false
-      skip-doctest-on-minimal-ghc:
+        default: latest
+      ghc-options:
+        description: Extra GHC options to pass to cabal build and cabal test.
+        type: string
+        default: ""
+      cabal-configure-extra-args:
+        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text < 2\"".
+        type: string
+        default: ""
+      skip-tests:
+        description: Skip building and running all tests including doctest.
         type: boolean
         default: false
       skip-doctest:
+        description: Skip building and running doctests.
+        type: boolean
+        default: false
+      skip-benchmarks:
+        description: Skip building benchmarks. For now they don't get executed either way.
         type: boolean
         default: false
       skip-haddock:
+        description: Skip generating Haddock documentation.
         type: boolean
         default: false
       skip-cabal-check:
+        description: Skip running cabal check.
         type: boolean
         default: false
-      minimal-cabal-configure-extra-args:
-        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text == 1.2.5\""
-        type: string
-        default: ""
-      maximal-cabal-configure-extra-args:
-        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text == 1.2.5\""
-        type: string
-        default: ""
 
 jobs:
   compile-and-test:
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - ghc: ${{ inputs.minimal-ghc }}
-            cabal-configure-extra-args: ${{ inputs.minimal-cabal-configure-extra-args }}
-            skip-tests: ${{ inputs.skip-tests-on-minimal-ghc }}
-            skip-doctest: ${{ inputs.skip-doctest || inputs.skip-doctest-on-minimal-ghc || inputs.skip-tests-on-minimal-ghc }}
-            skip-benchmarks: true
-          - ghc: latest
-            ghc-options: ""
-            cabal-configure-extra-args: ${{ inputs.maximal-cabal-configure-extra-args }}
-            skip-doctest: ${{ inputs.skip-doctest }}
 
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GHC ${{ matrix.ghc }}
+      - name: Set up build tools
         id: setup
         uses: haskell-actions/setup@v2
         with:
-          ghc-version: ${{ matrix.ghc }}
+          ghc-version: ${{ inputs.ghc }}
 
       - name: Configure
         shell: bash
         run: >
           cabal configure
-          ${{ !matrix.skip-tests && '--enable-tests' || '' }}
-          ${{ !matrix.skip-benchmarks && '--enable-benchmarks' || '' }}
-          ${{ matrix.cabal-configure-extra-args }}
+          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
+          ${{ !inputs.skip-benchmarks && '--enable-benchmarks' || '' }}
+          ${{ inputs.cabal-configure-extra-args }}
 
       - name: Generate the plan
         shell: bash
@@ -81,10 +76,10 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
+        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
 
       - name: Install doctest
-        if: ${{ !matrix.skip-doctest }}
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
         run: cabal install doctest --overwrite-policy=always
 
       - name: Save dependencies cache
@@ -96,20 +91,20 @@ jobs:
 
       - name: Compile
         shell: bash
-        run: cabal build all -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
+        run: cabal build all -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
 
       - name: Test
-        if: ${{ !matrix.skip-tests }}
+        if: ${{ !inputs.skip-tests }}
         shell: bash
-        run: cabal test all --test-show-details streaming -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
+        run: cabal test all --test-show-details streaming -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
 
       - name: Extract metadata from cabal file
-        if: ${{ !matrix.skip-doctest }}
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
         id: cabal-metadata
         uses: nikita-volkov/extract-metadata-from-cabal.github-action@v1
 
       - name: Run doctests
-        if: ${{ !matrix.skip-doctest }}
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
         shell: bash
         run: cabal repl --with-compiler=doctest ${{ steps.cabal-metadata.outputs.name }}
 
@@ -119,7 +114,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GHC
+      - name: Set up build tools
         id: setup
         uses: haskell-actions/setup@v2
 
@@ -133,15 +128,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up GHC
+      - name: Set up build tools
         id: setup
         uses: haskell-actions/setup@v2
 
-      - name: Configure the build
+      - name: Configure
         shell: bash
-        run: |
+        run: >
           cabal configure --enable-documentation
-          cabal build all --dry-run
+          ${{ inputs.cabal-configure-extra-args }}
+
+      - name: Generate the plan
+        shell: bash
+        run: cabal build all --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
@@ -155,7 +154,7 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: cabal build all --only-dependencies --enable-documentation -j +RTS -A128m -n2m -N -RTS
+        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS
 
       - name: Save dependencies cache
         uses: actions/cache/save@v4
